@@ -1,0 +1,121 @@
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: redis-ctrl-center
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        name: redis-ctrl-center
+        app: redis
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: redis-ctrl-center
+        image: 127.0.0.1:35000/redis-cluster:v0.0.1
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: MODE
+          value: "cluster_ctrl"
+        - name: REDIS_CLUSTER_REPLICAS
+          value: "1"
+        - name: LOG_LEVEL
+          value: "0"
+        - name: API_SERVER_ADDR
+          value: "http://10.129.52.217:18080"
+        - name: REDIS_PORT
+          value: "6380"
+        - name: MY_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: MY_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        ports:
+        - containerPort: 6380
+---
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: redis-cluster-node
+spec:
+  serviceName: "redis-cluster-svc"
+  replicas: 6
+  template:
+    metadata:
+      labels:
+        name: redis-cluster-node
+        app: redis
+    spec:
+      hostNetwork: False
+      dnsPolicy: ClusterFirstWithHostNet
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: redis-cluster-node
+        image: 127.0.0.1:35000/redis-cluster:v0.0.1
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: MODE
+          value: "cluster"
+        - name: REDIS_CLUSTER_REPLICAS
+          value: "1"
+        - name: LOG_LEVEL
+          value: "0"
+        - name: API_SERVER_ADDR
+          value: "http://10.129.52.217:18080"
+        - name: REDIS_PORT
+          value: "6380"
+        - name: MY_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: MY_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: MY_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        ports:
+        - containerPort: 6380
+        volumeMounts:
+  
+        securityContext:
+          capabilities: {}
+          privileged: true
+  
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cluster-svc
+  labels:
+    name: redis-cluster-svc
+    app: redis
+spec:
+  ports:
+  - port: 6379
+    targetPort: 6380
+  clusterIP: None
+  selector:
+    name: redis-cluster-node
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cluster-svc-np
+  labels:
+    name: redis-cluster-svc-np
+    app: redis
+spec:
+  ports:
+  - port: 6379
+    targetPort: 6380
+    nodePort: 36379
+  type: NodePort
+  selector:
+    name: redis-cluster-node 
